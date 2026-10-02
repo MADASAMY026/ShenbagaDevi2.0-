@@ -1,0 +1,291 @@
+<header class="nav">
+  <div class="wrap nav-in">
+    <a class="brand" (click)="scrollTo('home')"><span class="logo">🎟</span><b>Ticket<span>Go</span></b></a>
+    <nav class="links">
+      <a (click)="scrollTo('home')">Home</a><a (click)="scrollTo('services')">Services</a>
+      <a (click)="scrollTo('booking')">Booking</a>
+      <a (click)="openBookings()">My Bookings</a>
+    </nav>
+    <div class="nav-r">
+      <button class="icon-btn" (click)="toggleTheme()" [attr.aria-label]="'Toggle theme'">{{ theme() === 'light' ? '🌙' : '☀️' }}</button>
+      @if (user(); as u) {
+        <div class="profile">
+          <button class="btn ghost" (click)="profileOpen.set(!profileOpen())">👤 {{ u.name }}</button>
+          @if (profileOpen()) {
+            <div class="dropdown">
+              <button (click)="modal.set('bookings'); profileOpen.set(false)">🎫 My Bookings</button>
+              <button (click)="modal.set('profile'); profileOpen.set(false)">👤 Profile</button>
+              <button (click)="logout()">🚪 Logout</button>
+            </div>
+          }
+        </div>
+      } @else {
+        <button class="btn primary desk" (click)="openAuth()">Login / Sign Up</button>
+      }
+      <button class="icon-btn burger" (click)="menuOpen.set(!menuOpen())" aria-label="Menu">{{ menuOpen() ? '✕' : '☰' }}</button>
+    </div>
+  </div>
+  @if (menuOpen()) {
+    <div class="mobile-menu glass">
+      <a (click)="scrollTo('home')">Home</a><a (click)="scrollTo('services')">Services</a>
+      <a (click)="scrollTo('booking')">Booking</a>
+      <a (click)="openBookings()">My Bookings</a>
+      <a (click)="selectedCategory.set('Favorites'); scrollTo('services')">Favorites</a>
+      @if (user()) { <a (click)="logout(); menuOpen.set(false)">Logout ({{ user()!.name }})</a> }
+      @else { <a (click)="openAuth()">Login / Profile</a> }
+    </div>
+  }
+</header>
+@if (menuOpen()) { <div class="backdrop clear" (click)="menuOpen.set(false)"></div> }
+
+<section id="home" class="hero">
+  <div class="blob b1"></div><div class="blob b2"></div>
+  <div class="wrap hero-in">
+    <span class="pill">✨ Buses · Trains · Movies · Events</span>
+    <h1>Book your next journey,<br /><em>in a few taps.</em></h1>
+    <p>Search, compare and book tickets instantly. Live seat availability, secure demo checkout and printable receipts.</p>
+    <div class="search glass">
+      <span>🔍</span>
+      <input type="text" placeholder="Search by name, city, type, date (2026-10-05) or rating…" [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set($event)" (keyup.enter)="scrollTo('services')" />
+      @if (searchTerm()) { <button class="x" (click)="searchTerm.set('')">✕</button> }
+      <button class="btn primary" (click)="scrollTo('services')">Search</button>
+    </div>
+    <div class="tabs hero-tabs">
+      @for (c of categories.slice(0, 5); track c) {
+        <button [class.active]="selectedCategory() === c" (click)="selectedCategory.set(c); scrollTo('services')">
+          {{ c === 'All' ? '🌐' : c === 'Bus' ? '🚌' : c === 'Train' ? '🚆' : c === 'Movie' ? '🎬' : '🎤' }} {{ c }}
+        </button>
+      }
+    </div>
+  </div>
+</section>
+
+<main class="wrap">
+  <section id="services" class="sec">
+    <div class="sec-h"><h2>Available Services</h2><span class="muted">{{ visible().length }} result(s)</span></div>
+    <div class="tabs">
+      @for (c of categories; track c) {
+        <button [class.active]="selectedCategory() === c" (click)="selectedCategory.set(c)">{{ c === 'Favorites' ? '♥ ' : '' }}{{ c }}</button>
+      }
+    </div>
+    <div class="filters card">
+      <label>Sort By
+        <select [ngModel]="sortBy()" (ngModelChange)="sortBy.set($event)">
+          <option value="recommended">Recommended</option><option value="low">Price: Low to High</option>
+          <option value="high">Price: High to Low</option><option value="rating">Rating: High to Low</option>
+          <option value="seats">Available Seats: High to Low</option>
+        </select>
+      </label>
+      <label>Min Price: <b>₹{{ minPrice() }}</b>
+        <input type="range" min="0" max="2000" step="50" [ngModel]="minPrice()" (ngModelChange)="setPrice('min', +$event)" />
+      </label>
+      <label>Max Price: <b>₹{{ maxPrice() }}</b>
+        <input type="range" min="0" max="2000" step="50" [ngModel]="maxPrice()" (ngModelChange)="setPrice('max', +$event)" />
+      </label>
+      <button class="btn ghost" (click)="resetFilters()">↺ Reset Filters</button>
+    </div>
+
+    @if (loading()) {
+      <p class="muted">Loading available tickets…</p>
+      <div class="grid">@for (i of [1,2,3]; track i) { <div class="card skel"><i></i><i></i><i></i><i></i></div> }</div>
+    } @else if (visible().length === 0) {
+      <div class="empty card">
+        <div class="ei">{{ selectedCategory() === 'Favorites' ? '💔' : '🔎' }}</div>
+        <h3>{{ selectedCategory() === 'Favorites' ? 'No favorites yet' : 'No tickets found' }}</h3>
+        <p>{{ selectedCategory() === 'Favorites' ? 'Tap the ♡ on any service to save it here.' : 'Try a different search or adjust your filters.' }}</p>
+        <button class="btn primary" (click)="resetFilters()">Reset Filters</button>
+      </div>
+    } @else {
+      <div class="grid">
+        @for (s of visible(); track s.id) {
+          <article class="card svc" [class.soldout]="s.availableSeats === 0" [class.sel]="selectedService()?.id === s.id" (click)="openDetail(s)">
+            <div class="svc-top"><span class="ico">{{ s.icon }}</span><span class="tag">{{ s.type }}</span>
+              <button class="heart" [class.on]="isFavorite(s.id)" (click)="toggleFavorite(s.id, $event)" [attr.aria-label]="'Favorite'">{{ isFavorite(s.id) ? '♥' : '♡' }}</button></div>
+            <h3>{{ s.name }}</h3>
+            <p class="muted">{{ s.from }} → {{ s.to }}</p>
+            <p class="muted">📅 {{ s.date | date: 'dd MMM yyyy' }}</p>
+            <div class="rate"><span class="stars">{{ stars(s.rating) }}</span> {{ s.rating }}</div>
+            <div class="seat {{ seatStatus(s).cls }}"><i></i>
+              {{ s.availableSeats > 0 ? s.availableSeats + ' seats available' : 'No seats' }} · {{ seatStatus(s).label }}</div>
+            <div class="svc-bot"><div class="price">₹{{ s.price }}<small>/ticket</small></div>
+              <div class="btns">
+                <button class="btn ghost sm" (click)="openDetail(s); $event.stopPropagation()">View Details</button>
+                <button class="btn primary sm" [disabled]="s.availableSeats === 0" (click)="selectService(s); $event.stopPropagation()">{{ s.availableSeats === 0 ? 'Sold Out' : 'Select Ticket' }}</button>
+              </div></div>
+          </article>
+        }
+      </div>
+    }
+  </section>
+
+  <section id="booking" class="sec">
+    <div class="sec-h"><h2>Your Booking</h2></div>
+    <ol class="steps">
+      @for (s of steps; track s; let i = $index) {
+        <li [class.done]="step() > i + 1" [class.cur]="step() === i + 1"><b>{{ step() > i + 1 ? '✓' : i + 1 }}</b><span>{{ s }}</span></li>
+      }
+    </ol>
+    @if (selectedService(); as s) {
+      <div class="card panel">
+        <div class="panel-l">
+          <h3>{{ s.icon }} {{ s.name }}</h3>
+          <p class="muted">{{ s.from }} → {{ s.to }} · {{ s.availableSeats }} seats left</p>
+          <label class="lbl">Travel / Show Date
+            <input type="date" [min]="today" [ngModel]="selectedDate()" (ngModelChange)="onDate($event)" />
+          </label>
+          @if (dateError()) { <p class="err">{{ dateError() }}</p> }
+          <div class="lbl">Select Time
+            <div class="chips">
+              @for (t of s.times; track t) { <button [class.active]="selectedTime() === t" (click)="selectedTime.set(t)">🕒 {{ t }}</button> }
+            </div>
+          </div>
+          <div class="lbl">Tickets <span class="muted">(max {{ maxQty() }})</span>
+            <div class="qty">
+              <button (click)="changeQty(-1)" [disabled]="ticketCount() <= 1">−</button>
+              <b>{{ ticketCount() }}</b>
+              <button (click)="changeQty(1)" [disabled]="ticketCount() >= maxQty()">+</button>
+            </div>
+          </div>
+        </div>
+        <div class="panel-r">
+          <h4>Price Summary</h4>
+          <div class="row"><span>Price per ticket</span><b>₹{{ s.price }}</b></div>
+          <div class="row"><span>Tickets</span><b>× {{ ticketCount() }}</b></div>
+          <div class="row"><span>Date</span><b>{{ selectedDate() || '—' }}</b></div>
+          <div class="row"><span>Time</span><b>{{ selectedTime() || '—' }}</b></div>
+          <hr />
+          <div class="row tot"><span>Total</span>
+            @for (t of [total()]; track t) { <b class="pop">₹{{ t }}</b> }</div>
+          <button class="btn primary lg" (click)="confirmBooking()">Confirm Booking</button>
+          <button class="btn ghost" (click)="selectedService.set(null)">Clear selection</button>
+        </div>
+      </div>
+    } @else {
+      <div class="empty card"><div class="ei">🎫</div><h3>No service selected</h3>
+        <p>Choose a service above to pick a date, time and tickets.</p>
+        <button class="btn primary" (click)="scrollTo('services')">Browse Services</button></div>
+    }
+  </section>
+</main>
+<footer class="foot">© 2026 TicketGo · Experiment 5A: Ticket Search &amp; Selection using Angular · Frontend demo, no real payments</footer>
+
+@if (modal() !== '') {
+  <div class="overlay" (click)="closeModal()">
+    <div class="modal card" [class.receipt-wrap]="modal() === 'receipt'" (click)="$event.stopPropagation()">
+      @switch (modal()) {
+        @case ('detail') {
+          @if (detail(); as s) {
+            <button class="close" (click)="closeModal()">✕</button>
+            <h2>{{ s.icon }} {{ s.name }}</h2>
+            <p class="muted">{{ s.type }} · {{ s.from }} → {{ s.to }}</p>
+            <p>{{ s.desc }}</p>
+            <div class="kv"><span>Date</span><b>{{ s.date | date: 'dd MMM yyyy' }}</b>
+              <span>Times</span><b>{{ s.times.join(', ') }}</b>
+              <span>Rating</span><b><span class="stars">{{ stars(s.rating) }}</span> {{ s.rating }}</b>
+              <span>Seats</span><b>{{ s.availableSeats }} ({{ seatStatus(s).label }})</b>
+              <span>Price</span><b>₹{{ s.price }}</b></div>
+            <div class="btns end"><button class="btn ghost" (click)="closeModal()">Close</button>
+              <button class="btn primary" [disabled]="s.availableSeats === 0" (click)="selectService(s)">{{ s.availableSeats === 0 ? 'Sold Out' : 'Select Ticket' }}</button></div>
+          }
+        }
+        @case ('login') {
+          <button class="close" (click)="closeModal()">✕</button>
+          <h2>{{ authMode() === 'login' ? 'Welcome back' : 'Create your account' }}</h2>
+          @if (authMode() === 'signup') {
+            <input placeholder="Full Name" [(ngModel)]="form.name" name="n" />
+          }
+          <input type="email" placeholder="Email" [(ngModel)]="form.email" name="e" />
+          @if (authMode() === 'signup') { <input type="tel" placeholder="Phone Number" [(ngModel)]="form.phone" name="p" /> }
+          <input type="password" placeholder="Password (min 6 chars)" [(ngModel)]="form.password" name="pw" (keyup.enter)="authMode() === 'login' ? login() : signup()" />
+          @if (authMode() === 'signup') { <input type="password" placeholder="Confirm Password" [(ngModel)]="form.confirm" name="c" /> }
+          @if (authError()) { <p class="err">{{ authError() }}</p> }
+          <button class="btn primary lg" (click)="authMode() === 'login' ? login() : signup()">{{ authMode() === 'login' ? 'Login' : 'Sign Up' }}</button>
+          <div class="btns between">
+            @if (authMode() === 'login') { <button class="link" (click)="forgotPassword()">Forgot Password</button>
+              <button class="link" (click)="openAuth('signup')">Create Account</button> }
+            @else { <button class="link" (click)="openAuth('login')">Already have an account? Login</button> }
+          </div>
+          <p class="muted sm">Demo authentication stored in your browser only.</p>
+        }
+        @case ('profile') {
+          <button class="close" (click)="closeModal()">✕</button>
+          <h2>👤 Profile</h2>
+          <div class="kv"><span>Name</span><b>{{ user()?.name }}</b><span>Email</span><b>{{ user()?.email }}</b>
+            <span>Phone</span><b>{{ user()?.phone || '—' }}</b><span>Bookings</span><b>{{ myBookings().length }}</b></div>
+          <div class="btns end"><button class="btn ghost" (click)="logout()">Logout</button><button class="btn primary" (click)="closeModal()">Close</button></div>
+        }
+        @case ('bookings') {
+          <button class="close" (click)="closeModal()">✕</button>
+          <h2>🎫 My Bookings</h2>
+          @if (myBookings().length === 0) {
+            <div class="empty"><div class="ei">🧾</div><h3>No bookings yet</h3><p>Book your first ticket to see it here.</p>
+              <button class="btn primary" (click)="closeModal(); scrollTo('services')">Browse Services</button></div>
+          }
+          <div class="blist">
+            @for (b of myBookings(); track b.bookingId) {
+              <div class="bk" [class.cx]="b.status === 'Cancelled'">
+                <div class="bk-h"><b>{{ b.bookingId }}</b><span class="badge {{ b.status }}">{{ b.status }}</span></div>
+                <div>{{ b.serviceName }}</div>
+                <div class="muted">{{ b.from }} → {{ b.to }}</div>
+                <div class="muted">{{ b.date | date: 'dd MMM yyyy' }} · {{ b.time }} · {{ b.ticketCount }} Ticket(s)</div>
+                <div class="bk-h"><b>Total: ₹{{ b.totalPrice }}</b>
+                  <span class="btns"><button class="btn ghost sm" (click)="viewBooking(b)">View Details</button>
+                    @if (b.status === 'Confirmed') { <button class="btn danger sm" (click)="askCancel(b.bookingId)">Cancel Booking</button> }</span></div>
+              </div>
+            }
+          </div>
+        }
+        @case ('cancel') {
+          <h2>Cancel booking?</h2>
+          <p>Are you sure you want to cancel this booking?</p>
+          <div class="btns end"><button class="btn ghost" (click)="modal.set('bookings')">Keep Booking</button>
+            <button class="btn danger" (click)="cancelBooking()">Yes, Cancel</button></div>
+        }
+        @case ('payment') {
+          @if (paid()) {
+            <div class="success"><div class="check">✓</div><h2>Payment Successful</h2><p class="muted">Booking Confirmed!</p></div>
+          } @else if (processing()) {
+            <div class="success"><div class="spin"></div><h2>Processing payment…</h2><p class="muted">Please do not close this window.</p></div>
+          } @else {
+            <button class="close" (click)="closeModal()">✕</button>
+            <h2>Payment</h2>
+            <div class="amount">Booking Amount <b>₹{{ total() }}</b></div>
+            <div class="chips">
+              @for (m of ['UPI', 'Card', 'Cash at Counter']; track m) { <button [class.active]="payMethod() === m" (click)="payMethod.set(m); payError.set('')">{{ m === 'UPI' ? '📱' : m === 'Card' ? '💳' : '💵' }} {{ m }}</button> }
+            </div>
+            @if (payMethod() === 'UPI') { <input placeholder="UPI ID (name@bank)" [(ngModel)]="pay.upi" name="u" /> }
+            @if (payMethod() === 'Card') {
+              <input placeholder="Card Number (16 digits)" maxlength="19" [(ngModel)]="pay.card" name="cn" />
+              <div class="two"><input placeholder="MM/YY" maxlength="5" [(ngModel)]="pay.exp" name="ex" /><input placeholder="CVV" type="password" maxlength="3" [(ngModel)]="pay.cvv" name="cv" /></div>
+              <input placeholder="Card Holder Name" [(ngModel)]="pay.holder" name="ch" />
+            }
+            @if (payMethod() === 'Cash at Counter') { <p class="muted">Pay at the counter before travel / showtime.</p> }
+            @if (payError()) { <p class="err">{{ payError() }}</p> }
+            <p class="muted sm">Frontend demo only. Card and UPI details are never stored.</p>
+            <button class="btn primary lg" [disabled]="processing()" (click)="processPayment()">Pay & Confirm ₹{{ total() }}</button>
+          }
+        }
+        @case ('receipt') {
+          @if (receipt(); as r) {
+            <div class="receipt">
+              <div class="r-h"><div class="check sm">✓</div><h2>TICKETGO</h2><p>{{ r.status === 'Confirmed' ? 'BOOKING CONFIRMED' : 'BOOKING CANCELLED' }}</p></div>
+              <div class="kv"><span>Booking ID</span><b>{{ r.bookingId }}</b><span>Service</span><b>{{ r.serviceName }}</b>
+                <span>Route</span><b>{{ r.from }} → {{ r.to }}</b><span>Date</span><b>{{ r.date | date: 'dd MMM yyyy' }}</b>
+                <span>Time</span><b>{{ r.time }}</b><span>Tickets</span><b>{{ r.ticketCount }}</b>
+                <span>Price / Ticket</span><b>₹{{ r.pricePerTicket }}</b><span>Total Paid</span><b>₹{{ r.totalPrice }}</b>
+                <span>Payment</span><b>{{ r.payment }}</b><span>Status</span><b>{{ r.status }}</b></div>
+              <p class="muted sm">Thank you for booking with TicketGo.</p>
+            </div>
+            <div class="btns end noprint"><button class="btn ghost" (click)="printReceipt()">🖨 Print Receipt</button>
+              <button class="btn ghost" (click)="shareBooking()">🔗 Share Booking</button>
+              <button class="btn primary" (click)="closeModal()">Close</button></div>
+          }
+        }
+      }
+    </div>
+  </div>
+}
+
+<div class="toasts">
+  @for (t of toasts(); track t.id) { <div class="toast {{ t.kind }}">{{ t.kind === 'success' ? '✓' : t.kind === 'error' ? '✕' : t.kind === 'warning' ? '⚠' : 'ℹ' }} {{ t.msg }}</div> }
+</div>
