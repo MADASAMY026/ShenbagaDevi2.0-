@@ -283,7 +283,7 @@ input:focus,select:focus{
       rgba(76,29,149,.5) 55%,
       rgba(134,25,143,.45)
     ),
-    url('./hero.png') center/cover no-repeat;
+ url('/ShenbagaDevi2.0-/hero.png') center/cover no-repeat;
   color:#fff;
   padding:5rem 0 4rem;
   min-height:560px
